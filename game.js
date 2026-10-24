@@ -197,6 +197,25 @@ const Game = (() => {
     if (lines && lines.length)
       UI.appendDialogue(els.feed, { speaker, lines, kind })
   }
+
+async function promptLogout () {
+  const confirmed = await UI.confirm(
+    'You will remain logged in if you cancel. Any progress since your last save may be lost. Log out?',
+    {
+      title: 'Confirm Logout',
+      yes: 'Yes, Log Out',
+      no: 'Cancel'
+    }
+  )
+  if (!confirmed) return
+  if (typeof Combat !== 'undefined') Combat.cancel()
+  MiniGames.cancel()
+  if (typeof GameAudio !== 'undefined') GameAudio.stop()
+  if (typeof ItemFX !== 'undefined' && ItemFX.cancelAll) ItemFX.cancelAll()
+  document.removeEventListener('keydown', onGameKey)
+  Auth.logout()
+}
+
   function mount (rootEl) {
     root = rootEl
     UI.clear(root)
@@ -222,7 +241,8 @@ const Game = (() => {
       )
     })
     const newBtn = UI.btn('Start Game', 'ui-btn small danger', () => restart())
-    btns.append(miniBtn, saveBtn, newBtn)
+    const logoutBtn = UI.btn('Log Out', 'ui-btn small danger', promptLogout)
+    btns.append(miniBtn, saveBtn, newBtn,logoutBtn)
     if (typeof GameAudio !== 'undefined')
       btns.prepend(GameAudio.createControls())
     top.append(title, btns)
@@ -236,7 +256,7 @@ const Game = (() => {
       main.append(s)
     })
     root.append(top, main)
-    els = { screens, miniBtn, saveBtn, newBtn, combat: screens.combat }
+    els = { screens, miniBtn, saveBtn, newBtn, logoutBtn, combat: screens.combat }
     buildExploreShell()
     buildOverlays()
     document.removeEventListener('keydown', onGameKey)

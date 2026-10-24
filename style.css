@@ -728,11 +728,6 @@ body.page-dark-environment .scene-bg {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     overflow-wrap: anywhere;
 }
-
-.action .ui-btn.travel {
-    border-left: 1px solid var(--line);
-}
-
 .action .ui-btn.travel.visited {
     border-color: var(--green);
     color: var(--green);

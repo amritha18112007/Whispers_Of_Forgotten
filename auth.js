@@ -148,22 +148,38 @@ const Auth = (() => {
 
       form.append(usernameLabel, passwordLabel)
 
-      let confirmInput = null
-      if (mode === 'register') {
-        const confirmLabel = document.createElement('label')
-        confirmLabel.textContent = 'Confirm Password'
+      
+let passwordStatus = null
+if (mode === 'register') {
+  passwordStatus = document.createElement('p')
+  passwordStatus.className = 'auth-message'
+  passwordStatus.setAttribute('aria-live', 'polite')
+  passwordInput.insertAdjacentElement('afterend', passwordStatus)
+  const validatePassword = () => {
+    const password = passwordInput.value
+    const valid =
+      password.length >= 8 &&
+      /[a-z]/.test(password) &&
+      /[A-Z]/.test(password) &&
+      /\d/.test(password) &&
+      /[^a-zA-Z0-9]/.test(password)
+    passwordStatus.textContent = valid
+      ? 'Password meets all requirements.'
+      : 'Use 8+ characters with uppercase, lowercase, a number and a special character.'
+    passwordStatus.className = `auth-message ${valid ? 'success' : 'error'}`
+    if (confirmInput) {
+      confirmInput.setCustomValidity(
+        confirmInput.value && confirmInput.value !== password
+          ? 'Passwords do not match.'
+          : ''
+      )
+    }
+  }
+  passwordInput.addEventListener('input', validatePassword)
+  confirmInput.addEventListener('input', validatePassword)
+  validatePassword()
+}
 
-        confirmInput = document.createElement('input')
-        confirmInput.name = 'confirmPassword'
-        confirmInput.type = 'password'
-        confirmInput.autocomplete = 'new-password'
-        confirmInput.placeholder = 'Confirm your password'
-        confirmInput.required = true
-        confirmInput.minLength = 8
-        confirmLabel.append(confirmInput)
-
-        form.append(confirmLabel)
-      }
 
       const message = document.createElement('p')
       message.className = 'auth-message'
@@ -328,12 +344,6 @@ const Auth = (() => {
   }
 
   function logout () {
-    const session = getSession()
-    if (session && session.guest) {
-      try {
-        sessionStorage.removeItem('guest-whispers-of-the-forgotten-save-v1')
-      } catch (_) {}
-    }
     clearSession()
     window.location.reload()
   }
