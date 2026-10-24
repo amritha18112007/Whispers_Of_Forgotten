@@ -856,20 +856,6 @@ const Game = (() => {
     if (choice === 'correct') {
       gameState.puzzlesSolved['altar_ritual'] = true
       addItem('crystal-seal', gameState)
-      if (
-        typeof window !== 'undefined' &&
-        typeof window.dispatchEvent === 'function'
-      ) {
-        window.dispatchEvent(
-          new CustomEvent('whispers:item-added', {
-            detail: {
-              itemId: 'crystal-seal',
-              id: 'crystal-seal',
-              sourceEl: els.feed
-            }
-          })
-        )
-      }
       say(
         [
           'You strike the crystal nodes in harmony: Solar Gold, Azure Sky, and Crimson Fire. A brilliant column of crystalline energy erupts from the altar, solidifying into the sacred Crystal Seal!'
@@ -1810,20 +1796,7 @@ const Game = (() => {
     const before = [...gameState.inventory]
     onSearch(l.id, gameState)
     const found = gameState.inventory.filter(i => !before.includes(i))
-    if (found.length > 0) {
-      animateBag()
-    }
     found.forEach(i => {
-      if (
-        typeof window !== 'undefined' &&
-        typeof window.dispatchEvent === 'function'
-      ) {
-        window.dispatchEvent(
-          new CustomEvent('whispers:item-added', {
-            detail: { itemId: i, id: i, sourceEl: els.feed }
-          })
-        )
-      }
       say([`You found: ${itemName(i)}.`], 'reward')
       UI.toast(`Found: ${itemName(i)}`, 'good')
     })
@@ -1866,21 +1839,7 @@ const Game = (() => {
     const l = getLocation(res.locationId)
     if (res.result === 'victory') {
       const r = res.rewards || {}
-      if (r.items && r.items.length) {
-        animateBag()
-        if (
-          typeof window !== 'undefined' &&
-          typeof window.dispatchEvent === 'function'
-        ) {
-          r.items.forEach(itId => {
-            window.dispatchEvent(
-              new CustomEvent('whispers:item-added', {
-                detail: { itemId: itId, id: itId, sourceEl: els.combat }
-              })
-            )
-          })
-        }
-      }
+      if (r.items && r.items.length) animateBag()
       say([`You defeated the ${l.enemyName}.`, ...l.enemyReward], 'reward')
       ;(r.companionsGained || []).forEach(c => {
         say(c.recruitmentText, 'reward')
