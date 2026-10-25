@@ -10,11 +10,16 @@ const Game = (() => {
     inCombat = false,
     bgToken = 0,
     mountedOnce = false
+  let lastSavedSnapshot = null,
+    logoutBusy = false
   let openOverlayName = null,
     overlayOpener = null,
     selectedItemId = null,
     bagNote = ''
   function resolveSaveKey (k) {
+    if (typeof Auth !== 'undefined' && !Auth.isAuthenticated()) {
+      throw new Error('No active session.')
+    }
     const session = typeof Auth !== 'undefined' ? Auth.getSession() : null
     if (!session || session.guest) {
       return {
@@ -52,6 +57,16 @@ const Game = (() => {
       } catch (e) {}
     }
   }
+  // Public actions refuse to run once the session has ended or expired.
+  function sessionOk () {
+    if (typeof Auth === 'undefined' || Auth.isAuthenticated()) return true
+    console.warn('Game action blocked: no active session.')
+    return false
+  }
+  const guard =
+    fn =>
+    (...args) =>
+      sessionOk() ? fn(...args) : false
   function animateBag () {
     if (!els || !els.bagBtn) return
     els.bagBtn.classList.remove('bag-bounce')
@@ -91,6 +106,8 @@ const Game = (() => {
     gameState.crownEquipped = !!gameState.crownEquipped
     gameState.worldPurified = gameState.worldPurified || {}
     gameState.unlockedLocks = gameState.unlockedLocks || []
+    gameState.unlockedLocations = [...new Set(gameState.unlockedLocations)]
+    gameState.unlockedLocks = [...new Set(gameState.unlockedLocks)]
     ;[...gameState.visited, gameState.currentLocationId].forEach(id => {
       const l = getLocation(id)
       if (l && l.lock && !gameState.unlockedLocations.includes(id))
@@ -105,6 +122,7 @@ const Game = (() => {
     Object.assign(gameState, createGameState())
     ensureExtras()
     Player.reset()
+    lastSavedSnapshot = null
     if (els.feed) UI.clear(els.feed)
     document.body.classList.remove('page-dark-environment')
   }
@@ -122,16 +140,24 @@ const Game = (() => {
   function hasSave () {
     return !!store.get(config.saveKey)
   }
+  function serializeProgress () {
+    return JSON.stringify({
+      v: 2,
+      gameState: JSON.parse(JSON.stringify(gameState)),
+      player: Player.snapshot()
+    })
+  }
   function save () {
     if (!Player.state.classId) return false
-    return store.set(
-      config.saveKey,
-      JSON.stringify({
-        v: 2,
-        gameState: JSON.parse(JSON.stringify(gameState)),
-        player: Player.snapshot()
-      })
-    )
+    const data = serializeProgress()
+    const ok = store.set(config.saveKey, data)
+    if (ok) lastSavedSnapshot = data
+    return ok
+  }
+  // True when the hero has changed since the last successful save or load.
+  function hasUnsavedProgress () {
+    if (!Player.state.classId) return false
+    return serializeProgress() !== lastSavedSnapshot
   }
   function load () {
     let data
@@ -155,9 +181,11 @@ const Game = (() => {
     ensureExtras()
     gameState.inventory = gameState.inventory.filter(id => getItem(id))
     Player.restore(data.player)
+    lastSavedSnapshot = serializeProgress()
     showScreen('explore')
     say([`You continue your journey at ${loc().name}.`], 'system')
     renderExplore()
+    UI.toast('Game loaded.', 'good')
     return true
   }
   function showScreen (name) {
@@ -197,25 +225,52 @@ const Game = (() => {
     if (lines && lines.length)
       UI.appendDialogue(els.feed, { speaker, lines, kind })
   }
-
-async function promptLogout () {
-  const confirmed = await UI.confirm(
-    'You will remain logged in if you cancel. Any progress since your last save may be lost. Log out?',
-    {
-      title: 'Confirm Logout',
-      yes: 'Yes, Log Out',
-      no: 'Cancel'
+  // Clicking Logout only ASKS. The session ends only after "Yes, Log Out".
+  async function requestLogout () {
+    if (logoutBusy) return false
+    logoutBusy = true
+    if (els.logoutBtn) els.logoutBtn.disabled = true
+    let loggedOut = false
+    try {
+      const session = typeof Auth !== 'undefined' ? Auth.getSession() : null
+      const isGuest = !!(session && session.guest)
+      const lines = ['Are you sure you want to log out?']
+      if (inCombat) lines.push('Your current battle will end.')
+      if (isGuest && (Player.state.classId || hasSave())) {
+        lines.push(
+          'You are playing as a guest, so your progress is not kept after you log out.'
+        )
+      } else if (!isGuest && hasUnsavedProgress()) {
+        lines.push(
+          'You have unsaved progress that will be lost. Choose Cancel and press Save first to keep it.'
+        )
+      }
+      const confirmed = await UI.confirm(lines, {
+        yes: 'Yes, Log Out',
+        no: 'Cancel',
+        title: 'Log out?'
+      })
+      if (!confirmed) return false
+      if (typeof Auth === 'undefined' || !Auth.logout()) {
+        UI.toast('Could not log out. Please try again.', 'bad')
+        return false
+      }
+      loggedOut = true
+      return true
+    } catch (error) {
+      console.error('Logout error:', error && error.message)
+      UI.toast(
+        'Something went wrong while logging out. Please try again.',
+        'bad'
+      )
+      return false
+    } finally {
+      if (!loggedOut) {
+        logoutBusy = false
+        if (els.logoutBtn) els.logoutBtn.disabled = false
+      }
     }
-  )
-  if (!confirmed) return
-  if (typeof Combat !== 'undefined') Combat.cancel()
-  MiniGames.cancel()
-  if (typeof GameAudio !== 'undefined') GameAudio.stop()
-  if (typeof ItemFX !== 'undefined' && ItemFX.cancelAll) ItemFX.cancelAll()
-  document.removeEventListener('keydown', onGameKey)
-  Auth.logout()
-}
-
+  }
   function mount (rootEl) {
     root = rootEl
     UI.clear(root)
@@ -241,8 +296,19 @@ async function promptLogout () {
       )
     })
     const newBtn = UI.btn('Start Game', 'ui-btn small danger', () => restart())
-    const logoutBtn = UI.btn('Log Out', 'ui-btn small danger', promptLogout)
-    btns.append(miniBtn, saveBtn, newBtn,logoutBtn)
+    const session = typeof Auth !== 'undefined' ? Auth.getSession() : null
+    const userChip = h(
+      'span',
+      'user-chip',
+      '👤 ' + (session && session.username ? session.username : 'Player')
+    )
+    userChip.title =
+      session && session.guest ? 'Playing as a guest' : 'Signed in'
+    const logoutBtn = UI.btn('Logout', 'ui-btn small logout-btn', () =>
+      requestLogout()
+    )
+    logoutBtn.setAttribute('aria-label', 'Log out')
+    btns.append(miniBtn, saveBtn, newBtn, userChip, logoutBtn)
     if (typeof GameAudio !== 'undefined')
       btns.prepend(GameAudio.createControls())
     top.append(title, btns)
@@ -256,7 +322,14 @@ async function promptLogout () {
       main.append(s)
     })
     root.append(top, main)
-    els = { screens, miniBtn, saveBtn, newBtn, logoutBtn, combat: screens.combat }
+    els = {
+      screens,
+      miniBtn,
+      saveBtn,
+      newBtn,
+      logoutBtn,
+      combat: screens.combat
+    }
     buildExploreShell()
     buildOverlays()
     document.removeEventListener('keydown', onGameKey)
@@ -967,17 +1040,29 @@ async function promptLogout () {
       return false
     }
     openOverlayName = name
+    setNavActive(name)
     overlayOpener = opener || document.activeElement
     o.ov.hidden = false
     document.body.classList.add('no-scroll')
     o.close.focus()
     return true
   }
+  function setNavActive (name) {
+    ;[
+      ['map', els.mapBtn],
+      ['bag', els.bagBtn]
+    ].forEach(([id, btn]) => {
+      if (!btn) return
+      btn.classList.toggle('is-active', id === name)
+      btn.setAttribute('aria-pressed', String(id === name))
+    })
+  }
   function closeOverlay () {
     if (!openOverlayName) return false
     const o = openOverlayName === 'map' ? els.map : els.bag
     o.ov.hidden = true
     openOverlayName = null
+    setNavActive(null)
     document.body.classList.remove('no-scroll')
     if (overlayOpener && overlayOpener.focus) overlayOpener.focus()
     overlayOpener = null
@@ -1569,7 +1654,7 @@ async function promptLogout () {
         }
       }
       const closed = doors.filter(d => !isOpen(d.id))
-      if (!closed.length && isOpen(here.id)) {
+      if (!closed.length) {
         return {
           ok: false,
           text: `The way locked by the ${it.name} is already open.`
@@ -1707,23 +1792,32 @@ async function promptLogout () {
     )
     box.append(scrollContainer, use)
   }
-  async function onBagUse (itemId) {
-    closeOverlay()
-    if (typeof ItemSystem !== 'undefined' && ItemSystem.useItem) {
+  // Gameplay is decided by applyItem() (locks, clues, world state live there).
+  // ItemSystem is only trusted for items it explicitly implements and never for
+  // keys, so a use animation can no longer stand in for an unlock that never ran.
+  const itemSystemOwns = itemId =>
+    typeof ItemSystem !== 'undefined' &&
+    typeof ItemSystem.useItem === 'function' &&
+    (typeof ItemSystem.handles !== 'function' || ItemSystem.handles(itemId)) &&
+    (getItem(itemId) || {}).type !== 'key'
+  async function runItemUse (itemId) {
+    if (itemSystemOwns(itemId)) {
       try {
         const r = await ItemSystem.useItem(itemId, {
           gameState,
           player: Player.state,
           currentLocationId: gameState.currentLocationId
         })
-        if (r && (r.message || r.text)) {
-          const msg = r.message || r.text
-          say([msg], r.success || r.ok ? r.kind || 'reward' : 'locked')
-          UI.toast(msg, r.success || r.ok ? 'good' : 'bad')
+        if (!r || r.handled !== false) {
+          if (r && (r.message || r.text)) {
+            const msg = r.message || r.text
+            say([msg], r.success || r.ok ? r.kind || 'reward' : 'locked')
+            UI.toast(msg, r.success || r.ok ? 'good' : 'bad')
+          }
+          renderExplore()
+          save()
+          return !!(r && (r.success || r.ok))
         }
-        renderExplore()
-        save()
-        return
       } catch (err) {}
     }
     let r
@@ -1737,12 +1831,20 @@ async function promptLogout () {
     } catch (err) {
       console.error('Item use failed:', err)
       UI.toast('That item could not be used.', 'bad')
-      return
+      return false
     }
     UI.toast(
       r.ok ? r.note || `You activated the ${getItem(itemId).name}.` : r.text,
       r.ok ? 'good' : 'bad'
     )
+    // Animation is presentation only and plays only after a real success.
+    if (r.ok && typeof ItemSystem !== 'undefined' && ItemSystem.animateUse)
+      await ItemSystem.animateUse(itemId)
+    return r.ok
+  }
+  async function onBagUse (itemId) {
+    closeOverlay()
+    await runItemUse(itemId)
   }
   function renderLocation (locationId) {
     if (!getLocation(locationId)) return false
@@ -1933,30 +2035,7 @@ async function promptLogout () {
     return true
   }
   async function useItem (itemId) {
-    if (typeof ItemSystem !== 'undefined' && ItemSystem.useItem) {
-      try {
-        const r = await ItemSystem.useItem(itemId, {
-          gameState,
-          player: Player.state,
-          currentLocationId: gameState.currentLocationId
-        })
-        if (r && (r.message || r.text)) {
-          const msg = r.message || r.text
-          say([msg], r.success || r.ok ? r.kind || 'reward' : 'locked')
-          UI.toast(msg, r.success || r.ok ? 'good' : 'bad')
-        }
-        renderExplore()
-        save()
-        return !!(r && (r.success || r.ok))
-      } catch (err) {}
-    }
-    const r = applyItem(itemId)
-    if (r.ok) {
-      say([r.text], r.kind)
-      renderExplore()
-      save()
-    } else UI.toast(r.text, 'bad')
-    return r.ok
+    return runItemUse(itemId)
   }
   function showEnding () {
     const s = UI.clear(els.screens.end),
@@ -2016,26 +2095,28 @@ async function promptLogout () {
   }
   return {
     mount,
-    startNew,
-    renderLocation,
+    startNew: guard(startNew),
+    renderLocation: guard(renderLocation),
     config,
-    openOverlay,
+    openOverlay: guard(openOverlay),
     closeOverlay,
     get openOverlayName () {
       return openOverlayName
     },
-    travelTo,
-    search,
-    talk,
-    fight,
-    useItem,
-    journey,
-    save,
-    load,
-    hasSave,
-    restart,
+    travelTo: guard(travelTo),
+    search: guard(search),
+    talk: guard(talk),
+    fight: guard(fight),
+    useItem: guard(useItem),
+    journey: guard(journey),
+    save: guard(save),
+    load: guard(load),
+    hasSave: guard(hasSave),
+    restart: guard(restart),
+    logout: requestLogout,
+    hasUnsavedProgress,
     reset: resetState,
-    showEnding,
+    showEnding: guard(showEnding),
     rules,
     get inCombat () {
       return inCombat
