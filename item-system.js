@@ -66,7 +66,7 @@
       document: {
         title: 'Carved Serpent Stone',
         subtitle: 'An engraved key to the Temple Gate riddles',
-        clueKey: 'carved_stone_sequence',
+        clueKey: 'carved_stone',
         html: `
                     <p>Three ancient glyphs are chiseled deep into the granite surface:</p>
                     <div class="doc-pictographs" aria-label="Pictographs: Serpent, Sun, Flame">
