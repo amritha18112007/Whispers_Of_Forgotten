@@ -104,8 +104,6 @@ h3 {
 
 .ui-btn.primary {
     border-color: #b98e37;
-    color: var(--gold2);
-    background: linear-gradient(160deg, #413522, #211d17);
 }
 
 .ui-btn.danger {

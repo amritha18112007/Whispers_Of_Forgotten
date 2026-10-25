@@ -17,9 +17,9 @@ const Game = (() => {
     selectedItemId = null,
     bagNote = ''
   function resolveSaveKey (k) {
-    if (typeof Auth !== 'undefined' && !Auth.isAuthenticated()) {
-      throw new Error('No active session.')
-    }
+    if (typeof Auth !== 'undefined' && !Auth.getSession()) {
+  throw new Error('No active session.')
+}
     const session = typeof Auth !== 'undefined' ? Auth.getSession() : null
     if (!session || session.guest) {
       return {
@@ -858,7 +858,10 @@ const Game = (() => {
     }
   }
   async function solveTempleGlyphs () {
-    if (!gameState.clues['carved_stone']) {
+    if (
+  !gameState.clues['carved_stone'] &&
+  !gameState.clues['carved_stone_sequence']
+) {
       UI.toast(
         'You cannot make sense of these symbols yet. Find a clue first.',
         'bad'
