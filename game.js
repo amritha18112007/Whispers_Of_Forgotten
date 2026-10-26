@@ -18,8 +18,8 @@ const Game = (() => {
     bagNote = ''
   function resolveSaveKey (k) {
     if (typeof Auth !== 'undefined' && !Auth.getSession()) {
-  throw new Error('No active session.')
-}
+      throw new Error('No active session.')
+    }
     const session = typeof Auth !== 'undefined' ? Auth.getSession() : null
     if (!session || session.guest) {
       return {
@@ -57,7 +57,6 @@ const Game = (() => {
       } catch (e) {}
     }
   }
-  // Public actions refuse to run once the session has ended or expired.
   function sessionOk () {
     if (typeof Auth === 'undefined' || Auth.isAuthenticated()) return true
     console.warn('Game action blocked: no active session.')
@@ -154,7 +153,6 @@ const Game = (() => {
     if (ok) lastSavedSnapshot = data
     return ok
   }
-  // True when the hero has changed since the last successful save or load.
   function hasUnsavedProgress () {
     if (!Player.state.classId) return false
     return serializeProgress() !== lastSavedSnapshot
@@ -225,7 +223,6 @@ const Game = (() => {
     if (lines && lines.length)
       UI.appendDialogue(els.feed, { speaker, lines, kind })
   }
-  // Clicking Logout only ASKS. The session ends only after "Yes, Log Out".
   async function requestLogout () {
     if (logoutBusy) return false
     logoutBusy = true
@@ -859,9 +856,9 @@ const Game = (() => {
   }
   async function solveTempleGlyphs () {
     if (
-  !gameState.clues['carved_stone'] &&
-  !gameState.clues['carved_stone_sequence']
-) {
+      !gameState.clues['carved_stone'] &&
+      !gameState.clues['carved_stone_sequence']
+    ) {
       UI.toast(
         'You cannot make sense of these symbols yet. Find a clue first.',
         'bad'
@@ -1795,9 +1792,6 @@ const Game = (() => {
     )
     box.append(scrollContainer, use)
   }
-  // Gameplay is decided by applyItem() (locks, clues, world state live there).
-  // ItemSystem is only trusted for items it explicitly implements and never for
-  // keys, so a use animation can no longer stand in for an unlock that never ran.
   const itemSystemOwns = itemId =>
     typeof ItemSystem !== 'undefined' &&
     typeof ItemSystem.useItem === 'function' &&
@@ -1840,7 +1834,6 @@ const Game = (() => {
       r.ok ? r.note || `You activated the ${getItem(itemId).name}.` : r.text,
       r.ok ? 'good' : 'bad'
     )
-    // Animation is presentation only and plays only after a real success.
     if (r.ok && typeof ItemSystem !== 'undefined' && ItemSystem.animateUse)
       await ItemSystem.animateUse(itemId)
     return r.ok

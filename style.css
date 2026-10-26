@@ -102,10 +102,6 @@ h3 {
     font-size: .85rem;
 }
 
-.ui-btn.primary {
-    border-color: #b98e37;
-}
-
 .ui-btn.danger {
     border-color: #8f3d44;
     color: #ffb5b1;

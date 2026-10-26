@@ -64,7 +64,7 @@ const UI = (() => {
       r.textContent = text
     }, 20)
   }
-  function toast (text, kind = 'info', ms = 3200) {
+  function toast (text, kind = 'info', ms = 2000) {
     const box = root('ui-toasts', 'toasts center-toast-area')
     const t = el('div', `toast toast-${kind} prominent-toast`, text)
     box.append(t)

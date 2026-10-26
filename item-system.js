@@ -130,9 +130,6 @@
       }
     }
   }
-  // True only for items that have their own entry in ITEM_CONFIG. Everything else
-  // gets a generic *presentation* config from getConfig() (used for the discovery
-  // fly-in animation) but has no use-effect implemented here.
   function isConfigured (itemId) {
     if (!itemId) return false
     const normalized = String(itemId).toLowerCase().trim().replace(/_/g, '-')
@@ -220,8 +217,8 @@
         proxy.style.transform =
           'translate(-50%, -50%) scale(0.3) rotate(-10deg)'
 
-        const duration = options.duration || 680
-        const startTime = performance.now()
+        const duration = options.duration || 800
+        const startTime = performance.now() + 1000
 
         function frame (now) {
           const elapsed = now - startTime
