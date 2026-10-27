@@ -103,8 +103,9 @@ const GameAudio = (() => {
   function isEffectiveMuted () {
     const musicMuted = !settings.musicOn || settings.musicVol === 0
     const sfxMuted = settings.sfxVol === 0
+    const muted =!settings.musicOn
 
-    return musicMuted && sfxMuted
+    return musicMuted && sfxMuted || muted
   }
 
   function syncControlButtons () {

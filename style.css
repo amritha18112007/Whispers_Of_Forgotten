@@ -2489,7 +2489,7 @@ body.page-dark-environment .scene-bg {
     z-index: 10;
     pointer-events: none;
     transform-origin: top center;
-    animation: lanternSwing 3.2s ease-in-out infinite alternate;
+    animation: lanternSwing 5.2s ease-in-out infinite alternate;
 }
 
 .lantern-active-prop img {
