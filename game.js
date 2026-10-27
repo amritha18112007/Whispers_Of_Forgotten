@@ -231,11 +231,15 @@ const Game = (() => {
     try {
       const session = typeof Auth !== 'undefined' ? Auth.getSession() : null
       const isGuest = !!(session && session.guest)
-      const lines = ['Are you sure you want to log out?']
+      const lines = [
+        isGuest
+          ? 'Go to the sign-in page to log in or create an account?'
+          : 'Are you sure you want to log out?'
+      ]
       if (inCombat) lines.push('Your current battle will end.')
       if (isGuest && (Player.state.classId || hasSave())) {
         lines.push(
-          'You are playing as a guest, so your progress is not kept after you log out.'
+          'You are playing as a guest, so your progress is not kept when you leave guest mode.'
         )
       } else if (!isGuest && hasUnsavedProgress()) {
         lines.push(
@@ -243,13 +247,18 @@ const Game = (() => {
         )
       }
       const confirmed = await UI.confirm(lines, {
-        yes: 'Yes, Log Out',
+        yes: isGuest ? 'Yes, Go to Sign In' : 'Yes, Log Out',
         no: 'Cancel',
-        title: 'Log out?'
+        title: isGuest ? 'Leave guest mode?' : 'Log out?'
       })
       if (!confirmed) return false
       if (typeof Auth === 'undefined' || !Auth.logout()) {
-        UI.toast('Could not log out. Please try again.', 'bad')
+        UI.toast(
+          isGuest
+            ? 'Could not open the sign-in page. Please try again.'
+            : 'Could not log out. Please try again.',
+          'bad'
+        )
         return false
       }
       loggedOut = true
@@ -301,10 +310,16 @@ const Game = (() => {
     )
     userChip.title =
       session && session.guest ? 'Playing as a guest' : 'Signed in'
-    const logoutBtn = UI.btn('Logout', 'ui-btn small logout-btn', () =>
-      requestLogout()
+    const isGuestSession = !!(session && session.guest)
+    const logoutBtn = UI.btn(
+      isGuestSession ? 'Sign In' : 'Logout',
+      'ui-btn small logout-btn',
+      () => requestLogout()
     )
-    logoutBtn.setAttribute('aria-label', 'Log out')
+    logoutBtn.setAttribute(
+      'aria-label',
+      isGuestSession ? 'Sign in or create an account' : 'Log out'
+    )
     btns.append(miniBtn, saveBtn, newBtn, userChip, logoutBtn)
     if (typeof GameAudio !== 'undefined')
       btns.prepend(GameAudio.createControls())
